@@ -54,3 +54,8 @@ functions/.env.local
 *-debug.log
 .firebase/
 emulator-data/
+
+# Firebase client config (contains the Firebase API key).
+# Regenerate locally with: flutterfire configure --project=cloudquest-751db --platforms=android
+lib/firebase_options.dart
+android/app/google-services.json
