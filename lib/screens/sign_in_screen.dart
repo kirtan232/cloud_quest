@@ -64,12 +64,6 @@ class _SignInScreenState extends State<SignInScreen> {
               shrinkWrap: true,
               padding: const EdgeInsets.all(24),
               children: [
-                Icon(
-                  Icons.cloud_outlined,
-                  size: 56,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(height: 8),
                 Text(
                   _isCreatingAccount ? 'Create your account' : 'Welcome back',
                   textAlign: TextAlign.center,

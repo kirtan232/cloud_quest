@@ -39,7 +39,11 @@ class AuthGate extends StatelessWidget {
         if (user == null) return const SignInScreen();
         // Keyed by UID: signing out or switching accounts disposes the old
         // screen, clearing any private progress or coach text from the UI.
-        return ChallengeScreen(key: ValueKey(user.uid), user: user);
+        return ChallengeScreen(
+          key: ValueKey(user.uid),
+          uid: user.uid,
+          userLabel: user.email ?? user.uid,
+        );
       },
     );
   }
