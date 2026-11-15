@@ -66,3 +66,6 @@ export const completeToday = onCall(async (request) => {
     };
   });
 });
+
+// Supervised AI coach (read-only tool; cannot award rewards).
+export { askQuestCoach } from "./questCoach.js";

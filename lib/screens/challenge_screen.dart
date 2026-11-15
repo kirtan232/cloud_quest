@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../models/quest.dart';
 import '../services/auth_service.dart';
 import '../services/challenge_service.dart';
+import '../services/coach_service.dart';
 import '../services/reward_service.dart';
 
 /// Signed-in home screen. Only reachable through the auth gate in app.dart.
-/// Task 6 adds the Quest Coach.
+/// Flow: read the challenge -> optionally ask the Quest Coach for a hint ->
+/// the learner explicitly taps Complete -> the trusted Function rewards once.
 class ChallengeScreen extends StatefulWidget {
   const ChallengeScreen({
     super.key,
@@ -14,6 +16,7 @@ class ChallengeScreen extends StatefulWidget {
     required this.userLabel,
     this.questService,
     this.rewardService,
+    this.coachService,
     this.onSignOut,
   });
 
@@ -26,6 +29,7 @@ class ChallengeScreen extends StatefulWidget {
   /// Injected in tests; defaults to the real Firestore service.
   final QuestService? questService;
   final RewardService? rewardService;
+  final CoachService? coachService;
   final Future<void> Function()? onSignOut;
 
   @override
@@ -39,6 +43,8 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
   late final Stream<Progress> _progress;
   late final RewardService _rewards =
       widget.rewardService ?? CallableRewardService();
+  late final CoachService _coach =
+      widget.coachService ?? CallableCoachService();
 
   bool _isCompleting = false;
   _Status? _completeStatus;
@@ -115,6 +121,8 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
             const SizedBox(height: 12),
             _ChallengeCard(future: _challenge, onRetry: _retryChallenge),
             const SizedBox(height: 12),
+            _CoachCard(coach: _coach),
+            const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: _isCompleting ? null : _complete,
               style: FilledButton.styleFrom(
@@ -135,6 +143,141 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
             ],
             const SizedBox(height: 12),
             _ProgressCard(stream: _progress),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Quest Coach: sends the learner's question to the server-side agent and
+/// shows the reply as plain text. It has no access to the Complete action.
+/// Its state lives in this screen, which is disposed on sign-out (keyed by
+/// UID in app.dart), so hints never carry over to another account.
+class _CoachCard extends StatefulWidget {
+  const _CoachCard({required this.coach});
+
+  final CoachService coach;
+
+  @override
+  State<_CoachCard> createState() => _CoachCardState();
+}
+
+class _CoachCardState extends State<_CoachCard> {
+  final _questionController = TextEditingController();
+  bool _isLoading = false;
+  String? _reply;
+  String? _error;
+
+  @override
+  void dispose() {
+    _questionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _ask() async {
+    final question = _questionController.text.trim();
+    if (question.isEmpty) {
+      setState(() {
+        _error = 'Type a question for the coach first.';
+        _reply = null;
+      });
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final reply = await widget.coach.getQuestHint(question);
+      if (!mounted) return;
+      setState(() => _reply = reply);
+    } catch (error) {
+      debugPrint('Quest Coach request failed: $error');
+      if (!mounted) return;
+      setState(() {
+        _reply = null;
+        _error = friendlyCoachError(error);
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.support_agent, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('Quest Coach', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Ask for a hint. The coach can read your quest but can't "
+              'change your progress or award points.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _questionController,
+              maxLength: maxQuestionLength,
+              minLines: 1,
+              maxLines: 3,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) {
+                if (!_isLoading) _ask();
+              },
+              decoration: const InputDecoration(
+                labelText: 'Ask the Quest Coach for a hint',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: _isLoading ? null : _ask,
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.lightbulb_outline),
+              label: Text(_isLoading ? 'Thinking…' : 'Get hint'),
+            ),
+            if (_reply != null) ...[
+              const SizedBox(height: 12),
+              Semantics(
+                liveRegion: true,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  // Plain Text widget: the model's reply is never rendered as
+                  // markup, links, or code.
+                  child: Text(
+                    _reply!,
+                    style: TextStyle(
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+            ],
           ],
         ),
       ),
