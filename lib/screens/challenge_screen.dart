@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/quest.dart';
@@ -40,7 +42,6 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
   late final QuestService _quests =
       widget.questService ?? FirestoreQuestService();
   late Future<Challenge?> _challenge;
-  late final Stream<Progress> _progress;
   late final RewardService _rewards =
       widget.rewardService ?? CallableRewardService();
   late final CoachService _coach =
@@ -49,11 +50,36 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
   bool _isCompleting = false;
   _Status? _completeStatus;
 
+  // Progress is listened to ONCE here and the latest value is kept in state.
+  // (A StreamBuilder inside the list was rebuilt whenever a banner shifted the
+  // list, re-subscribed, and got stuck on "Loading" because Firestore doesn't
+  // send a new snapshot when a repeat completion changes nothing.)
+  StreamSubscription<Progress>? _progressSub;
+  Progress? _progress;
+  Object? _progressError;
+
   @override
   void initState() {
     super.initState();
     _challenge = _quests.loadChallenge();
-    _progress = _quests.watchProgress(widget.uid);
+    _progressSub = _quests
+        .watchProgress(widget.uid)
+        .listen(
+          (progress) => setState(() {
+            _progress = progress;
+            _progressError = null;
+          }),
+          onError: (Object error) {
+            debugPrint('Progress read failed: $error');
+            setState(() => _progressError = error);
+          },
+        );
+  }
+
+  @override
+  void dispose() {
+    _progressSub?.cancel();
+    super.dispose();
   }
 
   void _retryChallenge() {
@@ -142,7 +168,7 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
               _StatusBanner(status: _completeStatus!),
             ],
             const SizedBox(height: 12),
-            _ProgressCard(stream: _progress),
+            _ProgressCard(progress: _progress, error: _progressError),
           ],
         ),
       ),
@@ -341,9 +367,11 @@ class _ChallengeCard extends StatelessWidget {
 }
 
 class _ProgressCard extends StatelessWidget {
-  const _ProgressCard({required this.stream});
+  const _ProgressCard({required this.progress, required this.error});
 
-  final Stream<Progress> stream;
+  /// Latest progress from the screen's single Firestore listener.
+  final Progress? progress;
+  final Object? error;
 
   @override
   Widget build(BuildContext context) {
@@ -351,20 +379,18 @@ class _ProgressCard extends StatelessWidget {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: StreamBuilder<Progress>(
-          stream: stream,
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              debugPrint('Progress read failed: ${snapshot.error}');
+        child: Builder(
+          builder: (context) {
+            if (error != null) {
               return Text(
-                friendlyReadError(snapshot.error!),
+                friendlyReadError(error!),
                 style: TextStyle(color: theme.colorScheme.error),
               );
             }
-            if (!snapshot.hasData) {
+            final progress = this.progress;
+            if (progress == null) {
               return const _LoadingRow(label: 'Loading your progress…');
             }
-            final progress = snapshot.data!;
             final badge = progress.badgeId;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,

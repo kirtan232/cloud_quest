@@ -275,4 +275,32 @@ void main() {
     await tester.pump();
     expect(find.text('The coach is unavailable. Try again.'), findsOneWidget);
   });
+
+  testWidgets('progress stays visible after a repeat completion (regression)', (
+    tester,
+  ) async {
+    // A repeat completion doesn't change the progress document, so Firestore
+    // sends no new snapshot. The card must keep showing the last value.
+    // Tall screen so every card is built, like the phone in the bug report.
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final service = FakeQuestService(challenge: sample);
+    final rewards = FakeRewardService()..calls = 1; // next call = repeat
+    await tester.pumpWidget(host(service, rewards));
+    await tester.pump();
+    service.progress.add(
+      const Progress(completed: true, points: 10, badgeId: 'first-quest'),
+    );
+    await tester.pump();
+    expect(find.text('10 pts'), findsOneWidget);
+
+    await tester.tap(find.text('Complete challenge'));
+    await tester.pump();
+    expect(find.textContaining('Already completed.'), findsOneWidget);
+    expect(find.text('Loading your progress…'), findsNothing);
+    expect(find.text('10 pts'), findsOneWidget);
+    expect(find.text('First Quest badge'), findsOneWidget);
+  });
 }

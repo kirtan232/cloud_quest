@@ -24,7 +24,14 @@ import { googleAI } from "@genkit-ai/google-genai";
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 const MAX_QUESTION_LENGTH = 300;
 
-const coachMode = () => (process.env.COACH_MODE || "mock").toLowerCase();
+const COACH_MODES = ["mock", "fail", "gemini"];
+// First word only, so a trailing comment like "fail #mock" still means "fail".
+const coachMode = () => {
+  const raw = (process.env.COACH_MODE || "mock").trim().split(/\s+/)[0].toLowerCase();
+  if (COACH_MODES.includes(raw)) return raw;
+  console.warn(`Unknown COACH_MODE "${process.env.COACH_MODE}", using mock.`);
+  return "mock";
+};
 const modelName = () => process.env.COACH_MODEL || "gemini-2.5-flash";
 
 // The Gemini plugin needs the API key, which only exists at request time

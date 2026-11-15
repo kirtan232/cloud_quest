@@ -90,6 +90,8 @@ Manual checks in the app
   <img src="screenshots/3_create_account_filled.png" width="250">
 * Signed in: the challenge loads from Firestore and my progress shows 0 points.
   <img src="screenshots/4_challenge_not_completed.png" width="250">
+* The `challenges/today` document in the Firestore emulator. It only has a title and prompt, no reward values.
+  <img src="screenshots/challenge_doc.png" width="600">
 * After tapping Complete: 10 points and the First Quest badge.
   <img src="screenshots/5_completed_10_points.png" width="250">
 * The coach gives a hint based on my quest. It knows I already completed it and have 10 points, which came from the readMyQuestState tool.
