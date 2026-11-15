@@ -28,8 +28,23 @@ String friendlyAuthError(FirebaseAuthException error) {
     case 'too-many-requests':
       return 'Too many attempts. Wait a moment and try again.';
     case 'network-request-failed':
-      return 'Network error. Check your connection (and that the emulators are running).';
+      return _networkMessage;
+    case 'unknown':
+    case 'internal-error':
+      // On Android, an unreachable Auth server (e.g. emulators not started)
+      // surfaces as "unknown"/"internal-error" with "Failed to connect".
+      final message = error.message?.toLowerCase() ?? '';
+      if (message.contains('failed to connect') ||
+          message.contains('unable to resolve host') ||
+          message.contains('timeout')) {
+        return _networkMessage;
+      }
+      return _genericMessage;
     default:
-      return 'Something went wrong. Please try again.';
+      return _genericMessage;
   }
 }
+
+const _networkMessage =
+    'Can\'t reach the server. Check your connection (and that the emulators are running).';
+const _genericMessage = 'Something went wrong. Please try again.';

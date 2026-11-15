@@ -15,6 +15,7 @@ class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
   bool _isCreatingAccount = false;
   bool _isLoading = false;
   String? _error;
@@ -23,7 +24,16 @@ class _SignInScreenState extends State<SignInScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmController.dispose();
     super.dispose();
+  }
+
+  void _toggleMode() {
+    setState(() {
+      _isCreatingAccount = !_isCreatingAccount;
+      _error = null;
+      _confirmController.clear();
+    });
   }
 
   Future<void> _submit() async {
@@ -71,7 +81,9 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Sign in to see today\'s challenge and earn your badge.',
+                  _isCreatingAccount
+                      ? 'Create an account to start today\'s challenge and earn your badge.'
+                      : 'Sign in to see today\'s challenge and earn your badge.',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium,
                 ),
@@ -102,9 +114,17 @@ class _SignInScreenState extends State<SignInScreen> {
                       TextFormField(
                         controller: _passwordController,
                         obscureText: true,
-                        autofillHints: const [AutofillHints.password],
-                        textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => _isLoading ? null : _submit(),
+                        autofillHints: [
+                          _isCreatingAccount
+                              ? AutofillHints.newPassword
+                              : AutofillHints.password,
+                        ],
+                        textInputAction: _isCreatingAccount
+                            ? TextInputAction.next
+                            : TextInputAction.done,
+                        onFieldSubmitted: (_) {
+                          if (!_isCreatingAccount && !_isLoading) _submit();
+                        },
                         decoration: const InputDecoration(
                           labelText: 'Password',
                           border: OutlineInputBorder(),
@@ -119,6 +139,31 @@ class _SignInScreenState extends State<SignInScreen> {
                           return null;
                         },
                       ),
+                      if (_isCreatingAccount) ...[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _confirmController,
+                          obscureText: true,
+                          autofillHints: const [AutofillHints.newPassword],
+                          textInputAction: TextInputAction.done,
+                          onFieldSubmitted: (_) {
+                            if (!_isLoading) _submit();
+                          },
+                          decoration: const InputDecoration(
+                            labelText: 'Confirm password',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (value) {
+                            if ((value ?? '').isEmpty) {
+                              return 'Re-enter your password.';
+                            }
+                            if (value != _passwordController.text) {
+                              return 'Passwords don\'t match.';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -146,12 +191,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
                 const SizedBox(height: 8),
                 TextButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () => setState(() {
-                          _isCreatingAccount = !_isCreatingAccount;
-                          _error = null;
-                        }),
+                  onPressed: _isLoading ? null : _toggleMode,
                   child: Text(
                     _isCreatingAccount
                         ? 'Already have an account? Sign in'
