@@ -1,12 +1,32 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cloud_quest/models/quest.dart';
 import 'package:cloud_quest/screens/challenge_screen.dart';
 import 'package:cloud_quest/services/challenge_service.dart';
+import 'package:cloud_quest/services/reward_service.dart';
+
+/// Mimics the server's idempotent behaviour: first call awards, later calls
+/// return the existing reward. Can be switched to fail like a server outage.
+class FakeRewardService implements RewardService {
+  int calls = 0;
+  Object? failWith;
+
+  @override
+  Future<RewardResult> completeChallenge() async {
+    calls++;
+    if (failWith != null) throw failWith!;
+    return RewardResult(
+      points: 10,
+      badgeId: 'first-quest',
+      alreadyCompleted: calls > 1,
+    );
+  }
+}
 
 /// In-memory QuestService so the screen can be tested without Firebase.
 class FakeQuestService implements QuestService {
@@ -34,14 +54,16 @@ class FakeQuestService implements QuestService {
 
 const sample = Challenge(title: 'Guard the Treasure', prompt: 'Explain why…');
 
-Widget host(FakeQuestService service) => MaterialApp(
-  home: ChallengeScreen(
-    uid: 'learner-1',
-    userLabel: 'learner1@test.dev',
-    questService: service,
-    onSignOut: () async {},
-  ),
-);
+Widget host(FakeQuestService service, [FakeRewardService? rewards]) =>
+    MaterialApp(
+      home: ChallengeScreen(
+        uid: 'learner-1',
+        userLabel: 'learner1@test.dev',
+        questService: service,
+        rewardService: rewards ?? FakeRewardService(),
+        onSignOut: () async {},
+      ),
+    );
 
 void main() {
   group('Progress.fromMap', () {
@@ -132,6 +154,48 @@ void main() {
     await tester.pump();
     expect(
       find.text("You don't have access to this data. Try signing in again."),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('first completion celebrates; a repeat awards nothing new', (
+    tester,
+  ) async {
+    final rewards = FakeRewardService();
+    await tester.pumpWidget(host(FakeQuestService(challenge: sample), rewards));
+    await tester.pump();
+
+    await tester.tap(find.text('Complete challenge'));
+    await tester.pump();
+    expect(
+      find.text('+10 points! You earned the First Quest badge.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Complete challenge'));
+    await tester.pump();
+    expect(rewards.calls, 2);
+    expect(
+      find.text(
+        'Already completed. You still have 10 points; no extra points were awarded.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('server error shows a safe message', (tester) async {
+    final rewards = FakeRewardService()
+      ..failWith = FirebaseFunctionsException(
+        code: 'unavailable',
+        message: 'emulator down',
+      );
+    await tester.pumpWidget(host(FakeQuestService(challenge: sample), rewards));
+    await tester.pump();
+
+    await tester.tap(find.text('Complete challenge'));
+    await tester.pump();
+    expect(
+      find.text("Couldn't reach the server. Your progress is safe. Try again."),
       findsOneWidget,
     );
   });
