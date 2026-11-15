@@ -118,15 +118,17 @@ Manual checks in the app
 
   <img src="screenshots/8_complete_again.png" width="250">
 
-* Progress document in the Firestore emulator, still 10 points after the retry.
+* After tapping Complete a few more times, my progress is still 10 points and one badge. The retry never adds more points.
 
-  <img src="screenshots/9_progress_doc.png" width="250">
+  <img src="screenshots/9_progress_after_retry.png" width="250">
 
 * Coach error when the model is down (`COACH_MODE=fail`).
 
   <img src="screenshots/10_coach_error.png" width="250">
 
 * After signing out, the progress and coach are gone from the screen and it goes back to sign in.
+
+  <img src="screenshots/11_after_sign_out.png" width="250">
 
 Checks against the emulators with a test script
 
